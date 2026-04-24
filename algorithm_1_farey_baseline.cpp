@@ -1,118 +1,104 @@
 #include <iostream>
-#include <iomanip>
 #include <string>
-#include <chrono>
-#include <cstdint>
-#include <stdexcept>
 #include <algorithm>
+#include <chrono>
+#include <cstdlib>
+#include <cstdint>
 
-using u64 = std::uint64_t;
-using i64 = std::int64_t;
-using u128 = unsigned __int128;
+using i64 = int64_t;
+using i128 = unsigned __int128; 
 
-std::string to_string_u128(u128 x) {
-    if (x == 0) return "0";
+std::string to_string_i128(i128 n) {
+    if (n == 0) return "0";
     std::string s;
-    while (x > 0) {
-        int digit = static_cast<int>(x % 10);
-        s.push_back(static_cast<char>('0' + digit));
-        x /= 10;
+    while (n > 0) {
+        s += (char)('0' + (n % 10));
+        n /= 10;
     }
     std::reverse(s.begin(), s.end());
     return s;
 }
 
-u128 sum_h1w1(u64 h, u64 w, u64 s, u64 r) {
-    u64 m1 = (h - 1) / s;
-    u64 m2 = (w - 1) / r;
-    u64 m = 1 + std::min(m1, m2);
+i128 count_all_rectangles(i64 n) {
+    if (n <= 1) return 0;
 
-    u128 mm = static_cast<u128>(m);
-    u128 sk  = mm * (mm - 1) / 2;
-    u128 sk2 = (mm - 1) * mm * (2 * mm - 1) / 6;
+    i128 un = n;
+    i128 base = (un - 1) * ((un - 1) * un * (2 * un - 1) / 6);
+    i128 count = 0;
 
-    return mm * h * w
-         - (static_cast<u128>(h) * r + static_cast<u128>(w) * s) * sk
-         + (static_cast<u128>(r) * s) * sk2;
-}
+    i64 limit = n - 1;
+    i64 a = 0, b = 1, c = 1, d = limit;
 
-u128 F_fast(u64 n) {
-    if (n < 2) {
-        return 0;
-    }
-
-    u128 nn = static_cast<u128>(n);
-    u128 base = (nn - 1) * (nn - 1) * nn * (2 * nn - 1) / 6;
-    u128 count = 0;
-
-    u64 a = 0, b = 1, c = 1, d = n - 1;
-
-    while (c <= n - 1) {
-        u64 s = a;
-        u64 r = b;
-
-        if (r != 1 && r + s < n) {
-            i64 h = static_cast<i64>(n) - static_cast<i64>(r) - static_cast<i64>(s);
-            i64 w = h;
-
-            while (h > 0 && w > 0) {
-                count += sum_h1w1(static_cast<u64>(h), static_cast<u64>(w), s, r);
-                h -= static_cast<i64>(r);
-                w -= static_cast<i64>(s);
-            }
+    auto process = [&](i64 s, i64 r) __attribute__((always_inline)) {
+        if (r == 1) return;
+        
+        i64 h = n - r - s;
+        i64 w = h; 
+        
+        i128 rs = (i128)r * s; 
+        
+        while (h > 0 && w > 0) {
+            i64 m1 = (h - 1) / s;
+            i64 m2 = (w - 1) / r;
+            
+            i64 m = 1 + (m1 < m2 ? m1 : m2);
+            
+            i128 sk = (i128)m * (m - 1) / 2;
+            i128 sk2 = (i128)(m - 1) * m * (2 * m - 1) / 6;
+            
+            count += (i128)m * h * w - ((i128)h * r + (i128)w * s) * sk + rs * sk2;
+            
+            h -= r;
+            w -= s;
         }
+    };
 
-        u64 k = static_cast<u64>((static_cast<u128>(n - 1) + b) / d);
-        u64 na = c;
-        u64 nb = d;
-        u64 nc = k * c - a;
-        u64 nd = k * d - b;
-
-        a = na;
-        b = nb;
-        c = nc;
-        d = nd;
+    process(a, b);
+    while (c <= limit) {
+        i64 k_val = (limit + b) / d; 
+        i64 next_c = k_val * c - a;
+        i64 next_d = k_val * d - b;
+        
+        a = c;
+        b = d;
+        c = next_c;
+        d = next_d;
+        
+        process(a, b);
     }
 
     return base + 2 * count;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char **argv) {
     if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <k>\n";
-        std::cerr << "Program computes F_fast(2^1), F_fast(2^2), ..., F_fast(2^k)\n";
+        std::cerr << "usage: " << argv[0] << " k\n";
+        std::cerr << "benchmarks n = 2^1, 2^2, ..., 2^k\n";
         return 1;
     }
 
-    int kmax = 0;
-    try {
-        kmax = std::stoi(argv[1]);
-    } catch (...) {
-        std::cerr << "Invalid k\n";
+    int k = std::atoi(argv[1]);
+    if (k < 1 || k > 62) {
+        std::cerr << "k must be in [1, 62]\n";
         return 1;
     }
 
-    if (kmax < 1 || kmax > 62) {
-        std::cerr << "k must be in range [1, 62]\n";
-        return 1;
-    }
+    for (int e = 1; e <= k; ++e) {
+        i64 n = (1LL << e);
 
-    for (int k = 1; k <= kmax; ++k) {
-        u64 n = 1ULL << k;
-
+        auto t0 = std::chrono::steady_clock::now();
+        i128 ans = count_all_rectangles(n);
         auto t1 = std::chrono::steady_clock::now();
-        u128 result = F_fast(n);
-        auto t2 = std::chrono::steady_clock::now();
 
-        std::chrono::duration<double> elapsed = t2 - t1;
+        std::chrono::duration<double> dt = t1 - t0;
 
-        std::cout << "k = " << k
-                  << ", n = " << n
-                  << ", F_fast(n) = " << to_string_u128(result)
-                  << ", time = " << std::fixed << std::setprecision(6)
-                  << elapsed.count() << " s\n";
+        std::cout << "n=" << n
+                  << " result=" << to_string_i128(ans)
+                  << " time=" << dt.count()
+                  << "\n";
         std::cout.flush();
     }
 
     return 0;
 }
+
