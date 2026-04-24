@@ -1,53 +1,51 @@
 #include <iostream>
 #include <vector>
-#include <tuple>
-#include <chrono>
 #include <string>
 #include <algorithm>
-#include <numeric>
-#include <cmath>
+#include <chrono>
+#include <cstdlib>
 #include <cstdint>
-#include <stdexcept>
-#include <iomanip>
+#include <cmath>
 
-using i64 = long long;
-using u64 = unsigned long long;
+using u32 = uint32_t;
+using u64 = uint64_t;
+using i64 = int64_t;
 using i128 = __int128_t;
-using u128 = __uint128_t;
 
-struct Moments {
-    i128 A01, A11, A21, A02, A12, A03;
+struct Div {
+    u32 d;
+    int32_t mu;
 };
 
-static std::string to_string_i128(i128 x) {
-    if (x == 0) return "0";
-    bool neg = x < 0;
-    u128 v = neg ? (u128)(-x) : (u128)x;
+std::string to_string_i128(i128 n) {
+    if (n == 0) return "0";
+    if (n < 0) return "-" + to_string_i128(-n);
     std::string s;
-    while (v > 0) {
-        int digit = (int)(v % 10);
-        s.push_back(char('0' + digit));
-        v /= 10;
+    while (n > 0) {
+        s += (char)('0' + (n % 10));
+        n /= 10;
     }
-    if (neg) s.push_back('-');
     std::reverse(s.begin(), s.end());
     return s;
 }
 
-static Moments floor_moments(i64 n, i64 m, i64 a, i64 b) {
+void floor_moments(u64 n, u64 m, u64 a, u64 b, 
+                   i128& A01, i128& A11, i128& A21, i128& A02, i128& A12, i128& A03) {
     if (n == 0) {
-        return {0, 0, 0, 0, 0, 0};
+        A01 = A11 = A21 = A02 = A12 = A03 = 0;
+        return;
     }
 
     if (a >= m || b >= m) {
-        i64 q = a / m, r = a % m;
-        i64 s = b / m, t = b % m;
+        u64 q = a / m; u64 r = a % m;
+        u64 s = b / m; u64 t = b % m;
 
-        Moments B = floor_moments(n, m, r, t);
+        i128 B01, B11, B21, B02, B12, B03;
+        floor_moments(n, m, r, t, B01, B11, B21, B02, B12, B03);
 
         i128 s0 = n;
-        i128 s1 = (i128)n * (n - 1) / 2;
-        i128 s2 = (i128)n * (n - 1) * (2 * (i128)n - 1) / 6;
+        i128 s1 = ((i128)n * (n - 1)) >> 1;
+        i128 s2 = (i128)n * (n - 1) * (2 * n - 1) / 6;
         i128 s3 = s1 * s1;
 
         i128 qq = (i128)q * q;
@@ -56,246 +54,254 @@ static Moments floor_moments(i64 n, i64 m, i64 a, i64 b) {
         i128 sss = ss * s;
         i128 qs2 = 2 * (i128)q * s;
 
-        i128 A01 = (i128)q * s1 + (i128)s * s0 + B.A01;
-        i128 A11 = (i128)q * s2 + (i128)s * s1 + B.A11;
-        i128 A21 = (i128)q * s3 + (i128)s * s2 + B.A21;
+        A01 = q * s1 + s * s0 + B01;
+        A11 = q * s2 + s * s1 + B11;
+        A21 = q * s3 + s * s2 + B21;
 
-        i128 A02 = qq * s2 + ss * s0 + B.A02 + qs2 * s1 + 2 * (i128)q * B.A11 + 2 * (i128)s * B.A01;
-        i128 A12 = qq * s3 + ss * s1 + B.A12 + qs2 * s2 + 2 * (i128)q * B.A21 + 2 * (i128)s * B.A11;
+        A02 = qq * s2 + ss * s0 + B02 + qs2 * s1 + 2 * q * B11 + 2 * s * B01;
+        A12 = qq * s3 + ss * s1 + B12 + qs2 * s2 + 2 * q * B21 + 2 * s * B11;
 
-        i128 A03 =
-            qqq * s3
-            + 3 * qq * s * s2
-            + 3 * (i128)q * ss * s1
-            + sss * s0
-            + 3 * qq * B.A21
-            + 6 * (i128)q * s * B.A11
-            + 3 * ss * B.A01
-            + 3 * (i128)q * B.A12
-            + 3 * (i128)s * B.A02
-            + B.A03;
-
-        return {A01, A11, A21, A02, A12, A03};
+        A03 = qqq * s3 + 3 * qq * s * s2 + 3 * q * ss * s1 + sss * s0
+            + 3 * qq * B21 + 6 * q * s * B11 + 3 * ss * B01
+            + 3 * q * B12 + 3 * s * B02 + B03;
+        return;
     }
 
-    i64 y = ((i128)a * (n - 1) + b) / m;
+    u64 y = (a * (n - 1) + b) / m;
     if (y == 0) {
-        return {0, 0, 0, 0, 0, 0};
+        A01 = A11 = A21 = A02 = A12 = A03 = 0;
+        return;
     }
 
-    i64 bp = m + a - 1 - b;
-    Moments B = floor_moments(y, a, m, bp);
+    u64 bp = m + a - 1 - b;
+    i128 B01, B11, B21, B02, B12, B03;
+    floor_moments(y, a, m, bp, B01, B11, B21, B02, B12, B03);
 
-    i128 t1 = (i128)n * (n - 1) / 2;
-    i128 t2 = (i128)n * (n - 1) * (2 * (i128)n - 1) / 6;
+    i128 t1 = ((i128)n * (n - 1)) >> 1;
+    i128 t2 = (i128)n * (n - 1) * (2 * n - 1) / 6;
     i128 yy = (i128)y * y;
+    i128 n128 = n;
 
-    i128 A01 = (i128)n * y - B.A01;
-    i128 A11 = (i128)y * t1 - (B.A02 - B.A01) / 2;
-    i128 A21 = (i128)y * t2 - (2 * B.A03 - 3 * B.A02 + B.A01) / 6;
-    i128 A02 = (i128)n * yy - 2 * B.A11 - B.A01;
-    i128 A12 = yy * t1 - B.A12 - B.A02 / 2 + B.A11 + B.A01 / 2;
-    i128 A03 = (i128)n * y * yy - 3 * B.A21 - 3 * B.A11 - B.A01;
-
-    return {A01, A11, A21, A02, A12, A03};
+    A01 = n128 * y - B01;
+    A11 = y * t1 - (B02 - B01) / 2;
+    A21 = y * t2 - (2 * B03 - 3 * B02 + B01) / 6;
+    A02 = n128 * yy - 2 * B11 - B01;
+    A12 = yy * t1 - B12 - B02 / 2 + B11 + B01 / 2;
+    A03 = n128 * y * yy - 3 * B21 - 3 * B11 - B01;
 }
 
-static i128 count_rectangles_uv(i64 n, i64 u, i64 v) {
-    if (n <= 0 || u <= 0 || v <= 0 || std::gcd(u, v) != 1) {
-        return 0;
-    }
+i128 count_rectangles_uv(u64 N, u64 u, u64 v) {
+    if (N == 0) return 0;
 
-    if (u < v) std::swap(u, v);
-
-    i64 U = u, V = v;
-    i128 UV = (i128)U * V;
-    i128 U2pV2 = (i128)U * U + (i128)V * V;
-    i64 N = n;
-
-    auto segment_sum = [&](i64 lo, i64 hi, i64 a, i64 b, i64 m) -> i128 {
+    u64 U = u < v ? v : u;
+    u64 V = u < v ? u : v;
+    
+    auto segment_sum = [&](u64 lo, u64 hi, u64 a, u64 b, u64 m) -> i128 {
         if (lo > hi) return 0;
+        u64 L = hi - lo + 1;
+        
+        i128 A01, A11, A21, A02, A12, A03;
+        floor_moments(L, m, a, b, A01, A11, A21, A02, A12, A03);
 
-        i64 L = hi - lo + 1;
-        Moments M = floor_moments(L, m, a, b);
+        i128 hi128 = hi;
+        i128 hi2 = hi128 * hi128;
 
-        i128 hi2 = (i128)hi * hi;
-        i128 sum_t = M.A01;
-        i128 sum_kt = (i128)hi * M.A01 - M.A11;
-        i128 sum_k2t = hi2 * M.A01 - 2 * (i128)hi * M.A11 + M.A21;
-        i128 sum_t2 = M.A02;
-        i128 sum_kt2 = (i128)hi * M.A02 - M.A12;
-        i128 sum_t3 = M.A03;
+        i128 sum_t = A01;
+        i128 sum_kt = hi128 * A01 - A11;
+        i128 sum_k2t = hi2 * A01 - 2 * hi128 * A11 + A21;
+        i128 sum_t2 = A02;
+        i128 sum_kt2 = hi128 * A02 - A12;
+        i128 sum_t3 = A03;
 
-        i128 num =
-            6 * UV * sum_k2t
-            + 3 * U2pV2 * sum_kt2
-            + ((-6 * (i128)N * (U + V)) + 3 * U2pV2 - 6 * (U + V)) * sum_kt
-            + 2 * UV * sum_t3
-            + ((-3 * (i128)N * (U + V)) + 3 * UV - 3 * (U + V)) * sum_t2
-            + ((6 * (i128)N * N) - 3 * (i128)N * (U + V) + 12 * N + UV - 3 * (U + V) + 6) * sum_t;
+        i128 iUV = (i128)U * V;
+        i128 iU2pV2 = (i128)U * U + (i128)V * V;
+        i128 iUpV = (i128)U + V;
+        i128 iN = N;
 
-        return num / 6;
+        i128 term1 = 6 * iUV * sum_k2t;
+        i128 term2 = 3 * iU2pV2 * sum_kt2;
+        i128 term3 = (-6 * iN * iUpV + 3 * iU2pV2 - 6 * iUpV) * sum_kt;
+        i128 term4 = 2 * iUV * sum_t3;
+        i128 term5 = (-3 * iN * iUpV + 3 * iUV - 3 * iUpV) * sum_t2;
+        i128 term6 = (6 * iN * iN - 3 * iN * iUpV + 12 * iN + iUV - 3 * iUpV + 6) * sum_t;
+
+        return (term1 + term2 + term3 + term4 + term5 + term6) / 6;
     };
 
-    i64 m1 = N / (U + V);
-    i64 m2 = N / U;
+    u64 m1 = N / (U + V);
+    u64 m2 = N / U;
 
     i128 ans = 0;
-    if (m1) ans += segment_sum(1, m1, V, N - V * m1, U);
+    if (m1 > 0) ans += segment_sum(1, m1, V, N - V * m1, U);
     if (m2 > m1) ans += segment_sum(m1 + 1, m2, U, N - U * m2, V);
 
     return ans;
 }
 
-static i128 small_part(i64 n, i64 B) {
-    i128 s = count_rectangles_uv(n, 1, 1);
-    for (i64 u = 2; u <= B; ++u) {
-        for (i64 v = 1; v < u; ++v) {
-            if (std::gcd(u, v) == 1) {
-                s += 2 * count_rectangles_uv(n, u, v);
-            }
+i128 small_part(u64 N, u64 B) {
+    i128 s = count_rectangles_uv(N, 1, 1);
+    u64 f_a = 0, f_b = 1, f_c = 1, f_d = B;
+    
+    while (f_c <= B) {
+        u64 k_val = (B + f_b) / f_d;
+        u64 next_c = k_val * f_c - f_a;
+        u64 next_d = k_val * f_d - f_b;
+        f_a = f_c; f_b = f_d; f_c = next_c; f_d = next_d;
+
+        if (f_a == 1 && f_b == 1) break; 
+        if (f_a > 0) { 
+            s += 2 * count_rectangles_uv(N, f_b, f_a); 
         }
     }
     return s;
 }
 
-static std::vector<std::vector<std::pair<int, int>>> build_divs_mu(int n) {
-    std::vector<int> spf(n + 1);
-    for (int i = 0; i <= n; ++i) spf[i] = i;
+inline void pref(const std::vector<Div>& flat_divs, u32 start_idx, u32 end_idx, u64 M,
+                 i64& cnt, i128& s1, i128& s2) {
+    cnt = 0; s1 = 0; s2 = 0;
+    if (M == 0) return;
+    
+    for (u32 i = start_idx; i < end_idx; ++i) {
+        u64 d = flat_divs[i].d;
+        int32_t mu = flat_divs[i].mu;
+        u64 t = M / d;
+        if (t == 0) continue;
 
-    for (int i = 2; (i64)i * i <= n; ++i) {
+        i128 sum1 = ((i128)t * (t + 1)) >> 1;
+        
+        u64 ta = t, tb = t + 1, tc = 2 * t + 1;
+        if (ta % 2 == 0) ta /= 2; else tb /= 2;
+        if (ta % 3 == 0) ta /= 3; else if (tb % 3 == 0) tb /= 3; else tc /= 3;
+        i128 sum2 = (i128)ta * tb * tc;
+
+        u64 dd = d * d;
+
+        if (mu == 1) {
+            cnt += t;
+            s1 += (i128)d * sum1;
+            s2 += (i128)dd * sum2;
+        } else if (mu == -1) {
+            cnt -= t;
+            s1 -= (i128)d * sum1;
+            s2 -= (i128)dd * sum2;
+        }
+    }
+}
+
+i128 fast_large_part_by_r(u64 n, u64 B, const std::vector<u32>& head, const std::vector<Div>& flat_divs) {
+    i128 total = 0;
+    for (u64 r = B + 1; r < n; ++r) {
+        u64 k = (n - 1) / r;
+        if (k == 0) break; 
+        
+        u32 start_idx = head[r];
+        u32 end_idx = head[r + 1];
+
+        for (u64 a = 1; a <= k; ++a) {
+            for (u64 b = 1; b <= a; ++b) {
+                u64 mult = (a == b) ? 1 : 2;
+                u64 s_max = std::min(r, (n - 1 - a * r) / b);
+
+                i64 cnt; i128 s1, s2;
+                pref(flat_divs, start_idx, end_idx, s_max, cnt, s1, s2);
+
+                i128 n1 = (i128)n - (i128)a * r;
+                i128 n2 = (i128)n - (i128)b * r;
+                i128 ia = a, ib = b;
+
+                i128 term = n1 * n2 * cnt - (ia * n1 + ib * n2) * s1 + ia * ib * s2;
+                total += (i128)mult * term;
+            }
+        }
+    }
+    return total;
+}
+
+i128 rect_fastestest(u64 n) {
+    if (n <= 1) return 0;
+    
+    u64 B = std::pow(n, 2.0 / 3.0) / 2.0;
+
+    std::vector<u32> head(n + 2, 0);
+    std::vector<Div> flat_divs;
+    flat_divs.reserve(n * 4); 
+
+    std::vector<u32> spf(n + 1);
+    for (u32 i = 2; i <= n; ++i) spf[i] = i;
+    for (u32 i = 2; i * i <= n; ++i) {
         if (spf[i] == i) {
-            for (int j = i * i; j <= n; j += i) {
+            for (u32 j = i * i; j <= n; j += i) {
                 if (spf[j] == j) spf[j] = i;
             }
         }
     }
 
-    std::vector<std::vector<std::pair<int, int>>> out(n + 1);
-    if (n >= 1) out[1].push_back({1, 1});
+    head[1] = 0;
+    flat_divs.push_back({1, 1});
 
-    for (int x = 2; x <= n; ++x) {
-        int y = x;
-        std::vector<int> ps;
+    for (u32 x = 2; x <= n; ++x) {
+        head[x] = flat_divs.size();
+        u32 y = x;
+        
+        u32 ps[32]; 
+        u32 ps_count = 0;
+
         while (y > 1) {
-            int p = spf[y];
-            ps.push_back(p);
+            u32 p = spf[y];
+            ps[ps_count++] = p;
             while (y % p == 0) y /= p;
         }
 
-        std::vector<std::pair<int, int>> cur;
-        cur.push_back({1, 1});
-
-        for (int p : ps) {
-            int base_len = (int)cur.size();
-            for (int i = 0; i < base_len; ++i) {
-                auto [dd, mu] = cur[i];
-                cur.push_back({dd * p, -mu});
-            }
-        }
-
-        out[x] = std::move(cur);
-    }
-
-    return out;
-}
-
-static std::tuple<i128, i128, i128>
-coprime_interval_sums(const std::vector<std::pair<int, int>>& divs_mu_r, i64 L, i64 R) {
-    if (R < L) return {0, 0, 0};
-
-    auto pref = [&](i64 M) -> std::tuple<i128, i128, i128> {
-        if (M <= 0) return {0, 0, 0};
-
-        i128 cnt = 0, s1 = 0, s2 = 0;
-        for (auto [d, mu] : divs_mu_r) {
-            i64 t = M / d;
-            cnt += (i128)mu * t;
-            s1 += (i128)mu * d * (i128)t * (t + 1) / 2;
-            s2 += (i128)mu * d * d * (i128)t * (t + 1) * (2 * (i128)t + 1) / 6;
-        }
-        return {cnt, s1, s2};
-    };
-
-    auto [cR, sR1, sR2] = pref(R);
-    auto [cL, sL1, sL2] = pref(L - 1);
-    return {cR - cL, sR1 - sL1, sR2 - sL2};
-}
-
-static i128 fast_large_part_by_r(i64 n, i64 B, const std::vector<std::vector<std::pair<int, int>>>& divs_mu) {
-    i128 total = 0;
-
-    for (i64 r = B + 1; r < n; ++r) {
-        i64 k = (n - 1) / r;
-        for (i64 a = 1; a <= k; ++a) {
-            for (i64 b = 1; b <= a; ++b) {
-                i64 mult = (a == b ? 1 : 2);
-                i64 s_max = std::min<i64>(r, (n - 1 - a * r) / b);
-
-                auto [cnt, s1, s2] = coprime_interval_sums(divs_mu[(size_t)r], 1, s_max);
-
-                i128 n1 = n - a * r;
-                i128 n2 = n - b * r;
-
-                total += (i128)mult * (
-                    n1 * n2 * cnt
-                    - ((i128)a * n1 + (i128)b * n2) * s1
-                    + (i128)a * b * s2
-                );
+        u32 start = head[x];
+        flat_divs.push_back({1, 1});
+        for (u32 j = 0; j < ps_count; ++j) {
+            u32 p = ps[j];
+            u32 sz = flat_divs.size() - start;
+            for (u32 i = 0; i < sz; ++i) {
+                flat_divs.push_back({
+                    flat_divs[start + i].d * p,
+                    -flat_divs[start + i].mu
+                });
             }
         }
     }
+    head[n + 1] = flat_divs.size();
 
-    return total;
-}
-
-static i128 rect_fastestest(i64 n) {
-    i64 B = (i64)(std::pow((long double)n, 2.0L / 3.0L) / 2.0L);
-    auto divs_mu = build_divs_mu((int)n);
-    i128 S2 = fast_large_part_by_r(n, B, divs_mu);
+    i128 S2 = fast_large_part_by_r(n, B, head, flat_divs);
     i128 S1 = small_part(n - 1, B);
-    i128 S3 = (i128)n * (n - 1) * n * (n - 1) / 4;
+    
+    i128 in = n, in_minus = n - 1;
+    i128 S3 = (in * in_minus * in * in_minus) / 4;
+
     return S3 + 2 * S2 + S1;
 }
 
-int main(int argc, char* argv[]) {
+int main(int argc, char **argv) {
+    std::ios_base::sync_with_stdio(false);
+    std::cin.tie(NULL);
+
     if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <k>\n";
-        std::cerr << "Benchmark: rect_fastestest(2^1), rect_fastestest(2^2), ..., rect_fastestest(2^k)\n";
+        std::cerr << "usage: " << argv[0] << " k\n";
         return 1;
     }
 
-    int kmax = 0;
-    try {
-        kmax = std::stoi(argv[1]);
-    } catch (...) {
-        std::cerr << "Invalid k\n";
-        return 1;
-    }
+    int k = std::atoi(argv[1]);
 
-    if (kmax < 1 || kmax > 30) {
-        std::cerr << "k must be in range [1, 30]\n";
-        std::cerr << "Upper bound is practical, not mathematical.\n";
-        return 1;
-    }
+    for (int e = 1; e <= k; ++e) {
+        u64 n = (1ULL << e);
 
-    for (int k = 1; k <= kmax; ++k) {
-        i64 n = 1LL << k;
-
+        auto t0 = std::chrono::steady_clock::now();
+        i128 ans;
+        try {
+            ans = rect_fastestest(n);
+        } catch (const std::bad_alloc& ex) {
+            std::cerr << "\n[MEMORY LIMIT] Stopped at k=" << e << "\n";
+            break; 
+        }
         auto t1 = std::chrono::steady_clock::now();
-        i128 ans = rect_fastestest(n);
-        auto t2 = std::chrono::steady_clock::now();
 
-        std::chrono::duration<double> elapsed = t2 - t1;
-
-        std::cout
-            << "k = " << k
-            << ", n = " << n
-            << ", rect_fastestest(n) = " << to_string_i128(ans)
-            << ", time = " << std::fixed << std::setprecision(6)
-            << elapsed.count() << " s\n";
-
-        std::cout.flush();
+        std::chrono::duration<double> dt = t1 - t0;
+        std::cout << "n=" << n << " result=" << to_string_i128(ans) << " time=" << dt.count() << "\n";
     }
 
     return 0;
