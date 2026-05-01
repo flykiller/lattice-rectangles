@@ -16,6 +16,7 @@ The programs compute the number of lattice rectangles in the square grid and wer
 | `all_values_bench.cpp` | Benchmark implementation of the all-values `O(N^{3/2})` algorithm. |
 | `parallel_large_values.cpp` | Parallel C++ implementation used to compute large individual values. |
 | `cuda_large_values.cu` | CUDA implementation used to compute the largest reported values, up to `n = 2^40`. |
+| `absbp_xz_tool.cpp` | Encoder/decoder for the compressed precomputed table in the `v1.0-data` release. |
 
 ## Building
 
@@ -43,6 +44,14 @@ nvcc -O3 -std=c++17 -arch=sm_89 cuda_large_values.cu -o cuda_large_values
 ```
 
 Change `sm_89` if your GPU requires a different CUDA architecture.
+
+Compile the compressed-table tool with:
+
+```bash
+g++ -O2 -std=c++17 absbp_xz_tool.cpp -o absbp_xz_tool
+```
+
+The compressed-table tool requires the `xz` command-line utility.
 
 ## Running
 
@@ -88,8 +97,24 @@ Example:
 
 ## Precomputed values
 
-The repository also contains a compressed archive with the values for all `N <= 10^8`. The data is stored in compressed form because the uncompressed table is large. Use the accompanying Python decoder script in the repository to read or extract the values.
+Compressed precomputed values of `F(N)` for all `N <= 10^8` are available in the [`v1.0-data`](https://github.com/flykiller/lattice-rectangles/releases/tag/v1.0-data) release.
 
+The unpacked table is large, so it is not stored directly in this git repository. The release contains an `.absbp.xz` archive; after decompression it becomes a plain text file with one integer value per line.
+
+To decode the archive, build `absbp_xz_tool.cpp` and run:
+
+```bash
+./absbp_xz_tool decompress values_up_to_1e8.absbp.xz values_up_to_1e8.txt
+```
+
+The tool also supports compression and verification:
+
+```bash
+./absbp_xz_tool compress   values_up_to_1e8.txt values_up_to_1e8.absbp.xz
+./absbp_xz_tool verify     values_up_to_1e8.txt values_up_to_1e8.absbp.xz
+```
+
+The compressed format stores the first two values explicitly, then stores signed second differences using ZigZag coding, packs them by bit-planes, and finally compresses the binary stream with `xz`.
 
 ## Values at powers of two
 
